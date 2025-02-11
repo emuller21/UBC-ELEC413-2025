@@ -347,6 +347,7 @@ def enable_libraries():
 
 disable_libraries()
 
+design_count = 0
 import subprocess
 import pandas as pd
 for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
@@ -478,7 +479,7 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
             # Create sub-cell under subcell cell, using user's cell name
             subcell = layout.create_cell(cell.name)
             t = Trans(Trans.R0, -bbox.left,-bbox.bottom)
-            subcell2.insert(CellInstArray(subcell.cell_index(), t))
+            subcell_inst = subcell2.insert(CellInstArray(subcell.cell_index(), t))
         
             # clip cells
             cell2 = layout2.clip(cell.cell_index(), pya.Box(bbox.left,bbox.bottom,bbox.left+cell_Width,bbox.bottom+cell_Height))
@@ -491,6 +492,18 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
             subcell.copy_tree(layout2.cell(cell2))  
             
             log('  - Placed at position: %s, %s' % (x,y) )
+            
+            # connect to the laser tree    
+            #x_out = inst_tree_out[0].pinPoint('opt2').x + 100e3
+            # y_out = ytree_y - 934e3 / 2
+            
+            # intput waveguide:
+            #x_in = bbox2.left - 10e3
+            #y_in = bbox2.bottom + 10e3
+            
+            connect_pins_with_waveguide(inst_tree_out[design_count], 'opt2', subcell_inst, 'opt1', waveguide_type=waveguide_type) #, turtle_A=[10,90]) #turtle_B=[10,-90, 100, 90])
+
+            design_count += 1
                 
             # Measure the height of the cell that was added, and move up
             y += max (cell_Height, subcell.bbox().height()) + cell_Gap_Height
