@@ -61,7 +61,7 @@ The verification and merging is performed using GitHub actions. The repository i
 
 ## Latest Merge Layout File
 
-<img alt="Merged Layout" src="./merge/EBeam.png">
+<img alt="Merged Layout" src="./aggregate/Shuksan.png">
 
 Click on the following link to download the EBeam.oas merged layout file:
 <!-- start-link -->
