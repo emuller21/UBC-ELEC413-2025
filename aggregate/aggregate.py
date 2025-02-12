@@ -42,6 +42,7 @@ die_edge = die_size/2
 
 waveguide_type={'SiEPICfab_Shuksan_PDK':'Strip TE 1310 nm, w=350 nm', 
                 'SiEPICfab_EBeam_ZEP':'Strip TE 1310 nm, w=350 nm (core-clad)'}
+waveguide_type_routing='Si routing TE 1310 nm (compound waveguide)'
 
 blank_design = "design_ZZZ"  # Python design file, otherwise None for terminator.
 
@@ -495,7 +496,7 @@ for row in range(0, n_lasers):
         connect_pins_with_waveguide(
             inst_tree_out_all[int(d/2)], 'opt%s'%(2+(d+1)%2), 
             subcell_instances[d], 'opt_laser', 
-            waveguide_type=waveguide_type, 
+            waveguide_type=waveguide_type_routing, 
             turtle_B = [ # from the student
                 (cells_rows_per_laser-cell_row-1)*waveguide_pitch+radius_um,-90, # left away from student design
                 (cells_rows_per_laser-cell_row)*(cell_Height + cell_Gap_Height)*dbu + (cell_row + cell_column*cells_rows_per_laser)*waveguide_pitch,90, # up the column to the top
