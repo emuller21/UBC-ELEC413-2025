@@ -71,7 +71,7 @@ jobs:
 
       - name: install Python packages
         run: |
-          pip install siepic_ebeam_pdk IPython
+          pip install siepicfab_ebeam_zep IPython
           
       - name: run Aggregation script
         run: |
