@@ -8,7 +8,7 @@
   - Single full etch, using a positive resist
   - Air cladding
   - Laser integration
-- Process Design Kit: [SiEPIC-EBeam-PDK](https://github.com/SiEPIC/SiEPICfab-EBeam-ZEP-PDK)
+- Process Design Kit: [SiEPICfab-EBeam-ZEP-PDK](https://github.com/SiEPIC/SiEPICfab-EBeam-ZEP-PDK)
 
 
 # Submission instructions:
