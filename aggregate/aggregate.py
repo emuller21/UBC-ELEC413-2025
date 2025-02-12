@@ -1,26 +1,70 @@
-''''
-Automated merge for the edX Silicon Photonics course
-by Lukas Chrostowski, 2014-2025
-
-Run using Python, with import klayout and SiEPIC 
-
-Input:
-- folder submissions
-- containing files {EBeam*, openEBL_*, ELEC463*, ELEC413*, SiEPIC_Passives*, SiEPIC_Actives*}.{GDS,gds,OAS,oas,py}
-Output
-- in folder "merge"
--   files: EBeam.oas, EBeam.txt, EBeam.coords
 
 '''
+Script to create a layout:
 
+DFB Laser integrated with Photonic Wire Bonds
+Splitter tree using 1x2 splitters
+Aggregating submitted designs
+
+by Lukas Chrostowski, Sheri, 2022-2025
+
+using SiEPIC-Tools
+
+For more information on scripting:
+  https://github.com/SiEPIC/SiEPIC-Tools/wiki/Scripted-Layout
+  
+usage:
+ - run this script, inside KLayout Application, or externally using PyPI package
+   - requires siepicfab_ebeam_zep PyPI package 
+
+Install the PDK for develpers:
+# cd ... GitHub/SiEPICfab-EBeam-ZEP-PDK
+# pip install -e .
+
+ 
+'''
+
+import siepicfab_ebeam_zep
+
+# Debugging run, or complete
+draw_waveguides = True
+run_number_designs = 100
+
+# Configuration for the Technology to use
+tech = ["SiEPICfab_EBeam_ZEP"]
+tech = tech[0]
+
+# Configuration for the arrangement
+n_lasers = 3
+tree_depth = 4 
+die_size = 11e6
+die_edge = die_size/2
+
+waveguide_type={'SiEPICfab_Shuksan_PDK':'Strip TE 1310 nm, w=350 nm', 
+                'SiEPICfab_EBeam_ZEP':'Strip TE 1310 nm, w=350 nm (core-clad)'}
+
+blank_design = "design_ZZZ"  # Python design file, otherwise None for terminator.
+
+waveguide_pitch = 8
+dy_gcs = 127e3 # pitch of the fiber array
+pad_pitch = 250000
+metal_width = 20000
+metal_width_laser = 50000
+metal_width_laser_heater = 20000
 
 # configuration
-tech_name = 'EBeam'
-top_cell_name = 'EBeam_2025_02'
+top_cell_name = 'Shuksan_2025_02'
 cell_Width = 605000
 cell_Height = 410000
 cell_Gap_Width = 8000
 cell_Gap_Height = 8000
+cells_rows_per_laser = 4 
+cells_columns_per_laser = 4
+height_PCM = 3e6  # reserve this space at the top of the chip
+laser_dy = (die_size-height_PCM) / (n_lasers+1) # spread out evenly
+laser_y = -die_size/2 #  
+laser_x = -die_edge  + 2e6
+laser_design_offset = 4e6 # distance from the laser to the student design
 chip_Width = 8650000
 chip_Height1 = 8490000
 chip_Height2 = 8780000
@@ -31,7 +75,7 @@ br_cutout2_y = 5063000
 tr_cutout_x = 7037000
 tr_cutout_y = 8494000
 
-filename_out = 'EBeam'
+filename_out = 'Shuksan'
 layers_keep = ['1/0', '1/2', '100/0', '101/0', '1/10', '68/0', '81/0', '10/0', '99/0', '200/0', '11/0', '201/0', '6/0', '998/0']
 layer_text = '10/0'
 layer_SEM = '200/0'
@@ -39,7 +83,7 @@ layer_SEM_allow = ['edXphot1x', 'ELEC413','SiEPIC_Passives']  # which submission
 layers_move = [[[31,0],[1,0]]] # move shapes from layer 1 to layer 2
 dbu = 0.001
 log_siepictools = False
-framework_file = 'EBL_Framework_1cm_PCM_static.oas'
+framework_file = 'Framework_2023'
 ubc_file = 'UBC_static.oas'
 
 
@@ -49,34 +93,64 @@ start_time = time.time()
 from datetime import datetime
 now = datetime.now()
 
-# KLayout
+
+
+
+# SiEPIC-Tools initialization
 import pya
 from pya import *
-
-# SiEPIC-Tools
 import SiEPIC
+from packaging.version import Version
 from SiEPIC._globals import Python_Env, KLAYOUT_VERSION, KLAYOUT_VERSION_3
-from SiEPIC.scripts import zoom_out, export_layout
-from SiEPIC.utils import find_automated_measurement_labels
-import os
+if Version(SiEPIC.__version__) < Version('0.5.14'):
+    raise Exception ('This PDK requires SiEPIC-Tools v0.5.14 or greater.')
+from SiEPIC import scripts  
+from SiEPIC.utils import get_layout_variables
+from SiEPIC.scripts import connect_pins_with_waveguide, connect_cell, zoom_out, export_layout
+from SiEPIC.utils.layout import new_layout, floorplan
+from SiEPIC.utils import get_technology_by_name
+from SiEPIC.extend import to_itype
 
-
-# Output layout
-layout = pya.Layout()
-layout.dbu = dbu
-top_cell = layout.create_cell(top_cell_name)
+'''
+Create a new layout
+with a top cell
+and Draw the floor plan
+'''    
+top_cell, ly = new_layout(tech, top_cell_name, GUI=True, overwrite = True)
+layout = ly
+dbu = ly.dbu
 layerText = pya.LayerInfo(int(layer_text.split('/')[0]), int(layer_text.split('/')[1]))
 layerTextN = top_cell.layout().layer(layerText)
+
+TECHNOLOGY = get_technology_by_name(tech)
+if TECHNOLOGY['technology_name'] not in tech or not tech in pya.Technology.technology_names():
+    raise Exception ('This example needs to be executed in a layout with Technology = %s' % tech)
+else:
+    waveguide_type = waveguide_type[tech]
+
+
+'''
+# Floorplan
+die_edge = int(die_size/2)
+box = Box( Point(-die_edge, -die_edge), Point(die_edge, die_edge) )
+top_cell.shapes(ly.layer(TECHNOLOGY['FloorPlan'])).insert(box)
+'''
 
 def disable_libraries():
     print('Disabling KLayout libraries')
     for l in pya.Library().library_ids():
         print(' - %s' % pya.Library().library_by_id(l).name())
         pya.Library().library_by_id(l).delete()
+def enable_libraries():
+    import siepicfab_ebeam_zep
+    from importlib import reload  
+    siepicfab_ebeam_zep = reload(siepicfab_ebeam_zep)
+    siepicfab_ebeam_zep.pymacros = reload(siepicfab_ebeam_zep.pymacros)
 
-disable_libraries()
+
 
 # path for this python file
+import os
 path = os.path.dirname(os.path.realpath(__file__))
 
 # Log file
@@ -122,9 +196,15 @@ text = Text (merge_stamp, Trans(Trans.R0, 0, 0) )
 shape = cell_date.shapes(layout.layer(10,0)).insert(text)
 top_cell.insert(CellInstArray(cell_date.cell_index(), t))   
 
-# Origins for the layouts
-x,y = 0,cell_Height+cell_Gap_Height
 
+# Load all the layouts, without the libraries (no PCells)
+disable_libraries()
+# Origins for the layouts
+x,y = 2.5e6,cell_Height+cell_Gap_Height
+design_count = 0
+subcell_instances = []
+course_cells = []  # list of each of the student designs
+cells_course = []  # into which course cell the design should go into
 import subprocess
 import pandas as pd
 for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
@@ -147,10 +227,10 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
     layout2 = pya.Layout()
     layout2.read(f)
 
-    if 'ebeam' in basefilename.lower():
-        course = 'edXphot1x'
-    elif 'elec413' in basefilename.lower():
+    if 'elec413' in basefilename.lower():
         course = 'ELEC413'
+    elif 'ebeam' in basefilename.lower():
+        course = 'edXphot1x'
     elif 'openebl' in basefilename.lower():
         course = 'openEBL'
     elif 'siepic_passives' in basefilename.lower():
@@ -186,10 +266,10 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
 
     # Find the top cell
     for cell in layout2.top_cells():
-        if os.path.basename(f) == framework_file:
+        if framework_file in os.path.basename(f) :
             # Create sub-cell using the filename under top cell
             subcell2 = layout.create_cell(os.path.basename(f)+"_"+filedate)
-            t = Trans(Trans.R0, 0,0)
+            t = Trans(Trans.M90, 0,0)
             top_cell.insert(CellInstArray(subcell2.cell_index(), t))
             # copy
             subcell2.copy_tree(layout2.cell(cell.name)) 
@@ -215,8 +295,8 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
                 
             # Create sub-cell using the filename under course cell
             subcell2 = layout.create_cell(os.path.basename(f)+"_"+filedate)
-            t = Trans(Trans.R0, x,y)
-            cell_course.insert(CellInstArray(subcell2.cell_index(), t))
+            course_cells.append(subcell2)
+
             
             # Clear extra layers
             layers_keep2 = [layer_SEM] if course in layer_SEM_allow else []
@@ -256,7 +336,8 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
             # Create sub-cell under subcell cell, using user's cell name
             subcell = layout.create_cell(cell.name)
             t = Trans(Trans.R0, -bbox.left,-bbox.bottom)
-            subcell2.insert(CellInstArray(subcell.cell_index(), t))
+            subcell_inst = subcell2.insert(CellInstArray(subcell.cell_index(), t)) 
+            subcell_instances.append (subcell_inst)
         
             # clip cells
             cell2 = layout2.clip(cell.cell_index(), pya.Box(bbox.left,bbox.bottom,bbox.left+cell_Width,bbox.bottom+cell_Height))
@@ -269,6 +350,20 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
             subcell.copy_tree(layout2.cell(cell2))  
             
             log('  - Placed at position: %s, %s' % (x,y) )
+            
+            # connect to the laser tree  
+            from SiEPIC.utils.layout import make_pin
+            make_pin(subcell, 'opt_laser', [0,10e3], 350, 'PinRec', 180, debug=False)
+              
+            #x_out = inst_tree_out[0].pinPoint('opt2').x + 100e3
+            # y_out = ytree_y - 934e3 / 2
+            
+            # intput waveguide:
+            #x_in = bbox2.left - 10e3
+            #y_in = bbox2.bottom + 10e3
+            
+            design_count += 1
+            cells_course.append (cell_course)
                 
             # Measure the height of the cell that was added, and move up
             y += max (cell_Height, subcell.bbox().height()) + cell_Gap_Height
@@ -292,38 +387,149 @@ for f in [f for f in files_in if '.oas' in f.lower() or '.gds' in f.lower()]:
                 y = br_cutout2_y
 
 
-# move layers
-for i in range(0,len(layers_move)):
-    layer1=layout.find_layer(*layers_move[i][0])
-    layer2=layout.find_layer(*layers_move[i][1])
-    layout.move_layer(layer1, layer2)
 
-# Export as-is layout, for UW fabrication
-log('')
-
-#export_layout (top_cell, path, filename='EBeam', relative_path='', format='gds')
-file_out = export_layout (top_cell, path, filename='EBeam', relative_path='', format='oas')
-# log("Layout exported successfully %s: %s" % (save_options.format, file_out) )
+# Enable libraries, to create waveguides, laser, etc
+enable_libraries()
 
 
-log("\nExecution time: %s seconds" % int((time.time() - start_time)))
 
-log_file.close()
+# load the cells from the PDK
+if tech == "SiEPICfab_EBeam_ZEP":
+    library = tech
+    library_beta = "SiEPICfab_EBeam_ZEP_Beta"
+    # library_ubc = "SiEPICfab_EBeam_ZEP_UBC"
+    cell_y = ly.create_cell('ybranch_te1310', library)
+    #cell_splitter = ly.create_cell('splitter_2x2_1310', library)
+    #cell_heater = ly.create_cell('wg_heater', library)
+    #cell_waveguide = ly.create_cell('ebeam_pcell_taper',library, {
+        #'wg_width1': 0.35,
+        #'wg_width2': 0.352})
+    cell_waveguide = ly.create_cell('Waveguide_Straight',library_beta, {
+        'wg_length': 40,
+        'wg_width': 350})
+    # cell_waveguide = ly.create_cell('w_straight',library)
+    #cell_pad = ly.create_cell('ebeam_BondPad', library)
+    cell_gcA = ly.create_cell('GC_Air_te1310_BB', library)
+    cell_gcB = ly.create_cell('GC_Air_te1310_BB', library)
+    cell_terminator = ly.create_cell('terminator_te1310', library)
+    cell_laser = ly.create_cell('laser_1310nm_DFB_BB', library_beta)
+    metal_layer = "M1"
+    cell_taper = ly.create_cell('ebeam_taper_350nm_2000nm_te1310', library_beta)
 
-# Display the layout in KLayout, using KLayout Package "klive", which needs to be installed in the KLayout Application
-try:
-    if Python_Env == 'Script':
-        from SiEPIC.utils import klive
-        klive.show(file_out, technology=tech_name)
-except:
-    pass
- 
+if not cell_y:
+    raise Exception ('Cannot load 1x2 splitter cell; please check the script carefully.')
+#if not cell_splitter:
+#    raise Exception ('Cannot load 2x2 splitter cell; please check the script carefully.')
+if not cell_taper:
+    raise Exception ('Cannot load taper cell; please check the script carefully.')
+if not cell_gcA:
+    raise Exception ('Cannot load grating coupler cell; please check the script carefully.')
+if not cell_gcB:
+    raise Exception ('Cannot load grating coupler cell; please check the script carefully.')
+if not cell_terminator:
+    raise Exception ('Cannot load terminator cell; please check the script carefully.')
+if not cell_laser:
+    raise Exception ('Cannot load laser cell; please check the script carefully.')
+#if not cell_pad:
+#    raise Exception ('Cannot load bond pad cell; please check the script carefully.')
+if not cell_waveguide:
+    raise Exception ('Cannot load Waveguide Straight cell; please check the script carefully.')
+
+# Waveguide type:
+waveguides = ly.load_Waveguide_types()
+waveguide1 = [w for w in waveguides if w['name']==waveguide_type]
+if type(waveguide1) == type([]) and len(waveguide1)>0:
+    waveguide = waveguide1[0]
+else:
+    waveguide = waveguides[0]
+    print('error: waveguide type not found in PDK waveguides')
+    raise Exception('error: waveguide type (%s) not found in PDK waveguides: \n%s' % (waveguide_type, [w['name'] for w in waveguides]))
+radius_um = float(waveguide['radius'])
+radius = to_itype(waveguide['radius'],ly.dbu)
+
+
+# laser_height = cell_laser.bbox().height()
+
+inst_tree_out_all = []
+for row in range(0, n_lasers):
+    
+    # laser, place at absolute position
+    laser_y += laser_dy
+    t = pya.Trans.from_s('r0 %s,%s' % (int(laser_x), int(laser_y)) )
+    inst_laser = top_cell.insert(pya.CellInstArray(cell_laser.cell_index(), t))
+    
+    # splitter tree
+    from SiEPIC.utils.layout import y_splitter_tree
+    if tree_depth == 4:
+        n_x_gc_arrays = 6
+        n_y_gc_arrays = 1
+        x_tree_offset = 0
+        inst_tree_in, inst_tree_out, cell_tree = y_splitter_tree(top_cell, tree_depth=tree_depth, y_splitter_cell=cell_y, library="SiEPICfab_Shuksan_PDK", wg_type=waveguide_type, draw_waveguides=True)
+        ytree_x = inst_laser.bbox().right + x_tree_offset
+        ytree_y = inst_laser.pinPoint('opt1').y # - cell_tree.bbox().height()/2
+        t = Trans(Trans.R0, ytree_x, ytree_y)
+        top_cell.insert(CellInstArray(cell_tree.cell_index(), t))
+    else:
+        # Handle other cases if needed
+        raise Exception("Invalid tree_depth value")
+    
+    inst_tree_out_all += inst_tree_out
+    
+    # Waveguide, laser to tree:
+    connect_pins_with_waveguide(inst_laser, 'opt1', inst_tree_in, 'opt1', waveguide_type=waveguide_type, turtle_A=[10,90]) #turtle_B=[10,-90, 100, 90])
+
+    # instantiate the student cells, and waveguides
+    # in batches for each y-tree
+    # in a 2D layout array, limited in the height by laser_dy
+    position_y0 = laser_y - laser_dy/2
+    position_x0 = laser_x+laser_design_offset
+    cells_rows_per_laser
+    cells_columns_per_laser
+    cell_row, cell_column = 0, 0
+    for d in range(row*tree_depth**2, min(design_count,(row+1)*tree_depth**2)):
+        # Instantiate the course student cell
+        position_y = cell_row * (cell_Height + cell_Gap_Height)
+        position_x = cell_column * (radius + cell_Width + waveguide_pitch/dbu * cells_rows_per_laser)
+        t = Trans(Trans.R0, position_x0 + position_x, position_y0 + position_y)
+        cells_course[d].insert(CellInstArray(course_cells[d].cell_index(), t))
+        connect_pins_with_waveguide(
+            inst_tree_out_all[int(d/2)], 'opt%s'%(2+(d+1)%2), 
+            subcell_instances[d], 'opt_laser', 
+            waveguide_type=waveguide_type, 
+            turtle_B = [ # from the student
+                (cells_rows_per_laser-cell_row-1)*waveguide_pitch+radius_um,-90, # left away from student design
+                (cells_rows_per_laser-cell_row)*(cell_Height + cell_Gap_Height)*dbu + (cell_row + cell_column*cells_rows_per_laser)*waveguide_pitch,90, # up the column to the top
+                100,90, # left towards the laser
+            ],
+            turtle_A = [ # from the laser
+                ((cells_columns_per_laser-cell_column)*cells_rows_per_laser + (cells_rows_per_laser-cell_row))*waveguide_pitch, 90,
+                10,-90,
+            ],
+            verbose=False) 
+        #, turtle_A=[10,90]) #turtle_B=[10,-90, 100, 90])
+        cell_row += 1
+        if cell_row > cells_rows_per_laser-1:
+            cell_column += 1
+            cell_row = 0
+            # break
+
+    
+
+  
+
+# Export for fabrication
+import os 
+path = os.path.dirname(os.path.realpath(__file__))
+filename = 'Shuksan' # top_cell_name
+file_out = export_layout(top_cell, path, filename, relative_path = '.', format='oas', screenshot=True)
+
+
+from SiEPIC._globals import Python_Env
+if Python_Env == "Script":
+    from SiEPIC.utils import klive
+    klive.show(file_out, technology=tech)
 
 # Create an image of the layout
-import siepic_ebeam_pdk
-layout.technology_name = 'EBeam'
-top_cell.image(os.path.join(path,'EBeam.png'))
+top_cell.image(os.path.join(path,filename+'.png'))
 
-print("KLayout EBeam_merge.py, completed in: %s seconds" % int((time.time() - start_time)))
-
-
+print('Completed %s designs' % design_count)
