@@ -9,8 +9,8 @@ on:
       - completed
 
 jobs:
-  merge:
-    # only run the merge script on the SiEPIC account  
+  aggregate:
+    # only run the aggregation script on the SiEPIC account  
     #if: github.repository_owner == 'SiEPIC'
       # if: >-
       # github.event.pull_request.user.login != 'SiEPIC' &&
@@ -71,32 +71,31 @@ jobs:
 
       - name: install Python packages
         run: |
-          pip install siepic_ebeam_pdk IPython
+          pip install siepicfab_ebeam_zep IPython
           
       - name: run Aggregation script
         run: |
 
-          python merge/EBeam_merge.py
+          python aggregate/aggregate.py
 
       - name: move Aggregation output files to new folder
         run: |
-          #output_files="EBeam.gds EBeam.oas EBeam.txt EBeam.coords"
-          output_files="EBeam.oas EBeam.txt"
+          output_files="Shuksan.oas Shuksan.txt"
 
           IFS=' '
 
-          mkdir -p merge_output
+          mkdir -p aggregate_output
 
           for file in $output_files; do
-            cp "merge/$file" merge_output/
+            cp "aggregate/$file" aggregate_output/
           done
 
       - name: upload artifact
         uses: actions/upload-artifact@v4
         id: artifact-upload
         with:
-          name: merge-files
-          path: merge_output/
+          name: aggregate-files
+          path: aggregate_output/
 
       - name: get artifact url
         run: |
@@ -134,7 +133,7 @@ jobs:
           git config --local user.email "${{ github.actor }}@users.noreply.github.com"
           git config --local user.name "${{ github.actor }}"
           git add README.md
-          git add merge/EBeam.png
-          git commit -m "Aggregation layout: $ARTIFACT_URL"
+          git add aggregate/Shuksan.png
+          git commit -m "Aggregated layout: $ARTIFACT_URL"
           git push
         if: env.TRIGGER_INFO != 'pull request' && github.repository_owner == 'SiEPIC'
