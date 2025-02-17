@@ -514,6 +514,12 @@ for row in range(0, n_lasers):
             cell_row = 0
             # break
 
+    from SiEPIC.scripts import connect_cell
+    for d in range(min(design_count,(row+1)*tree_depth**2), (row+1)*tree_depth**2):
+             
+            inst = connect_cell(inst_tree_out_all[int(d/2)], 'opt%s'%(2+(d+1)%2), 
+                                cell_terminator, 'pin1')
+
     
 
   
