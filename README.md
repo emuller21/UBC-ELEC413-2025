@@ -59,6 +59,9 @@ The verification and merging is performed using GitHub actions. The repository i
 3) Performing Functional verification on the designs in the "submissions" folder, and outputing the errors as an Artifact
 4) Aggregation of the designs from the "submissions" folder, and outputing aggregated layout as an Artifact in the main repository
 
+## Measurement data
+https://qdot-nexus.phas.ubc.ca:25683/s/7SSDdRLHw7fAaN8
+
 ## Latest Aggregated Layout File
 
 <img alt="Aggregated Layout" src="./aggregate/Shuksan.png">
