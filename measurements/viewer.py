@@ -10,7 +10,7 @@ import zipfile
 import shutil
 import pathlib
 import klayout.db as pya
-import siepic_ebeam_pdk
+import siepicfab_ebeam_zep
 import SiEPIC
 from SiEPIC.utils import find_automated_measurement_labels
 import matplotlib.pyplot as plt
@@ -194,6 +194,12 @@ class TabbedGUI(QMainWindow):
         else:
             self.imageLabel.setText("Cell not found in layout")
         return None
+
+def disable_libraries():
+    print('Disabling KLayout libraries')
+    for l in pya.Library().library_ids():
+        print(' - %s' % pya.Library().library_by_id(l).name())
+        pya.Library().library_by_id(l).delete()
     
 def load_layout_and_extract_labels():
     """
@@ -208,9 +214,12 @@ def load_layout_and_extract_labels():
     if not os.path.exists(layout_path):
         raise FileNotFoundError(f"Layout file not found at expected location: {layout_path}")
     
+    # Load all the layouts, without the libraries (no PCells)
+    disable_libraries()
+
     layout = pya.Layout()
     layout.read(layout_path)
-    layout.technology_name = "EBeam"
+    layout.technology_name = "SiEPICfab_EBeam_ZEP"
     
     top_cell = layout.top_cell()
     if not top_cell:
@@ -328,11 +337,12 @@ if __name__ == "__main__":
         layout, labels = load_layout_and_extract_labels()
         mat_path = os.path.join(script_dir,'mat_files')
         matches = match_files_with_labels(mat_path, labels)
+        '''
         for m in matches:
             if 'MZI1' in m:
                 print(matches[m])
                 #analyze_mat_file(matches[m][0],m)
-                
+        '''     
         app = QApplication(sys.argv)
         window = TabbedGUI(layout, matches)
         window.show()
