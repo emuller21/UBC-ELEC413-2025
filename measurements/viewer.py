@@ -16,7 +16,7 @@ from SiEPIC.utils import find_automated_measurement_labels
 import matplotlib.pyplot as plt
 import scipy.io
 import sys
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QLabel, QTabWidget, QScrollArea, QPushButton
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QLabel, QTabWidget, QScrollArea, QPushButton, QTextEdit
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 import matplotlib.pyplot as plt
@@ -37,6 +37,7 @@ class TabbedGUI(QMainWindow):
         self.setGeometry(100, 100, 800, 600)
         self.matches = dict(sorted(matches.items()))
         self.layout = layout
+        self.top_cell = layout.top_cell()
         self.legend_enabled = True  # Track legend state
         self.multi_selection = False  # Track selection mode
         
@@ -90,9 +91,18 @@ class TabbedGUI(QMainWindow):
         layout3.addWidget(self.legend_button)
         self.tab3.setLayout(layout3)
         
+        # Tab 4: Netlist
+        self.tab4 = QWidget()
+        self.text_output = QTextEdit()
+        self.text_output.setReadOnly(True)
+        layout4 = QVBoxLayout()
+        layout4.addWidget(self.text_output)
+        self.tab4.setLayout(layout4)
+        
         # Add tabs to the main layout
         self.tabs.addTab(self.tab2, "Image")
         self.tabs.addTab(self.tab3, "Plot")
+        self.tabs.addTab(self.tab4, "Netlist")
         main_layout.addWidget(self.tabs, 3)  # Takes 3 parts of the space
         
         main_widget.setLayout(main_layout)
@@ -130,6 +140,17 @@ class TabbedGUI(QMainWindow):
                 mat_file_path = self.matches[selected_key][0]  # Get the first associated file
                 self.plot_mat_data(mat_file_path, selected_key, len(selected_items)>1)
                 self.display_klayout_cell_image(selected_key, width=self.scrollArea.width()*0.99)
+                opt_in_selection_text=[self.matches[selected_key][1]['opt_in']]
+                print(opt_in_selection_text)
+                try:
+                    text_subckt, text_main, *_ = self.cell.spice_netlist_export(opt_in_selection_text=opt_in_selection_text)
+#                    print(text_subckt, text_main)
+                    self.text_output.setPlainText(text_subckt)
+                    self.text_output.append(text_main)
+                except:
+                    text = 'No netlist available for this circuit.'
+                    self.text_output.setPlainText(text)
+                    pass
         
         if len(selected_items)>1:
             self.ax.set_title(f"Spectrum Data for selected files")
@@ -174,6 +195,7 @@ class TabbedGUI(QMainWindow):
         """
         Generates an image of the KLayout cell and displays it in Tab 2.
         """
+        layer_optin = [10,0]
         layout = self.layout
         if cell_name:
             self.cell_name = cell_name
@@ -182,18 +204,82 @@ class TabbedGUI(QMainWindow):
                 cell_name = self.cell_name
         for m in self.matches:
             if cell_name == m:
-                # path = os.path.dirname(self.matches[m][0])
-                cell = find_text_label(layout, [10,0], self.matches[m][1]['opt_in'])
+                cell = find_text_label(layout, layer_optin, self.matches[m][1]['opt_in'])
+                break
         if cell:
+            # draw an arrow
+            # find opt_in position:
+            iter = cell.begin_shapes_rec(layout.layer(layer_optin))
+            trans = None
+            while not (iter.at_end()):
+                if iter.shape().is_text():
+                    text = iter.shape().text
+                    if self.matches[m][1]['opt_in'] == text.string:
+                        trans = pya.Trans(text.x, text.y)
+                iter.next()
+            if trans:
+                arrow_shape = draw_right_facing_arrow(cell, layer_optin, trans)
+            else:
+                print('opt_in label location not found.')
+                arrow_shape = draw_right_facing_arrow(cell, layer_optin)
             # image_path = os.path.join(path,f"{cell_name}.png")
             image_path = os.path.join(SiEPIC._globals.TEMP_FOLDER, f"{cell_name}.png")
             im = cell.image(image_path, width=width, retina=False)
             qp = QPixmap(image_path)
             self.imageLabel.setPixmap(qp)
             #self.imageLabel.setPixmap(QPixmap(image_path).scaled(400, 300, Qt.AspectRatioMode.KeepAspectRatio))
+            # arrow_shape.erase()
+            cell.shapes(layout.layer(layer_optin)).erase(arrow_shape)
+            self.cell = cell
         else:
             self.imageLabel.setText("Cell not found in layout")
+            self.cell = None
         return None
+
+def draw_right_facing_arrow(cell, layer, trans=pya.Trans()):
+    """
+    Draws a right-facing arrow, with a transformed location
+    
+    Args:
+        cell (pya.Cell): The cell in which the arrow will be drawn.
+        layer: e.g., [10,0]
+        trans: pya.Trans transformation
+        
+    """
+    # Define the layer
+    layer_index = cell.layout().layer(layer)
+
+    # Define the arrow points
+    length = 60e3  # microns
+    width = 20e3   # microns
+    
+    points = [
+        pya.Point(-length, width // 2),       # Left upper corner
+        pya.Point(-length * 0.4, width // 2), # Arrow cut upper
+        pya.Point(-length * 0.4, width),      # Right upper end
+        pya.Point(0, 0),                      # Right middle
+        pya.Point(-length * 0.4, -width),     # Right lower end
+        pya.Point(-length * 0.4, -width // 2),# Arrow cut lower
+        pya.Point(-length, -width // 2),      # Left lower corner
+    ]
+
+    # Create the polygon and insert it into the layout
+    polygon = pya.Polygon(points)
+    # this should work:
+    # cell.shapes(layer_index).insert(polygon)
+    # but returns an error: RuntimeError: Cannot call non-const method on a const reference in Shapes.insert
+    # KLayout bug? https://github.com/KLayout/klayout/issues/235
+    # work around:
+    arrow_shape = cell.layout().cell(cell.cell_index()).shapes(layer_index).insert(polygon.transformed(trans))
+    return arrow_shape
+
+'''
+# Example usage
+layout = pya.Layout()
+top_cell = layout.create_cell("Top")
+draw_right_facing_arrow(top_cell, [10,0])
+layout.write("left_arrow.gds")
+'''
 
 def disable_libraries():
     print('Disabling KLayout libraries')
