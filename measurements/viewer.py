@@ -397,7 +397,8 @@ def find_text_label(layout, layer_name, target_text):
             text = iter.shape().text.string
             if text == target_text:
                 # Ensure we return a non-Const cell, see issue: https://github.com/KLayout/klayout/issues/235
-                return layout.cell(iter.cell().name) 
+                # return layout.cell(iter.cell().name) 
+                return layout.cell(iter.cell_index())
         iter.next()
     return None
 
