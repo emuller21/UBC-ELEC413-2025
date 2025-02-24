@@ -205,6 +205,7 @@ class TabbedGUI(QMainWindow):
         for m in self.matches:
             if cell_name == m:
                 cell = find_text_label(layout, layer_optin, self.matches[m][1]['opt_in'])
+#                print(f"is cell const object? 2 {cell._is_const_object()}")
                 break
         if cell:
             # draw an arrow
@@ -270,7 +271,9 @@ def draw_right_facing_arrow(cell, layer, trans=pya.Trans()):
     # but returns an error: RuntimeError: Cannot call non-const method on a const reference in Shapes.insert
     # KLayout bug? https://github.com/KLayout/klayout/issues/235
     # work around:
-    arrow_shape = cell.layout().cell(cell.cell_index()).shapes(layer_index).insert(polygon.transformed(trans))
+    # arrow_shape = cell.layout().cell(cell.cell_index()).shapes(layer_index).insert(polygon.transformed(trans))
+    # solved at the original cell object creation
+    arrow_shape = cell.shapes(layer_index).insert(polygon.transformed(trans))
     return arrow_shape
 
 '''
@@ -393,7 +396,8 @@ def find_text_label(layout, layer_name, target_text):
         if iter.shape().is_text():
             text = iter.shape().text.string
             if text == target_text:
-                return iter.cell()
+                # Ensure we return a non-Const cell, see issue: https://github.com/KLayout/klayout/issues/235
+                return layout.cell(iter.cell().name) 
         iter.next()
     return None
 
